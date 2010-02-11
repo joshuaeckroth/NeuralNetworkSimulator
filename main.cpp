@@ -80,6 +80,11 @@ int main(int argc, char *argv[])
                 network.backprop(output, expected[index]);
             }
         }
+        if(epoch % 10000 == 0)
+        {
+            qDebug() << QString("epoch: %1, error: %2")
+                .arg(epoch).arg(error/double(inputs.size()), 5, 'f', 5);
+        }
         if(error/double(inputs.size()) <= 0.05) break;
     }
     delete[] ordering;
