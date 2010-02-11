@@ -5,10 +5,6 @@
 #include <cmath>
 using namespace std;
 
-#include <QDebug>
-#include <QFile>
-#include <QTextStream>
-
 #include "ffnetwork.h"
 
 /**
@@ -46,9 +42,6 @@ FFNetwork::FFNetwork(QObject *parent, vector<unsigned int> _layers) :
 
         delta[i-1] = new double[layers[i]];
     }
-    file = new QFile("weights.csv");
-    file->open(QIODevice::WriteOnly | QIODevice::Text);
-    row = 0;
 }
 
 void FFNetwork::fillRandomWeights()
@@ -75,10 +68,7 @@ vector<double> FFNetwork::processInput(vector<double> input)
         neuronVals[0][i] = input[i];
     }
 
-    QTextStream out(file);
-
     double sum;
-    //out << row++ << ",";
     for(unsigned int i = 1; i < layers.size(); i++)
     {
         // for each neuron in layer
@@ -89,19 +79,16 @@ vector<double> FFNetwork::processInput(vector<double> input)
             // find sum with weights (ignore bias when counting with w)
             for(unsigned int w = 0; w < layers[i-1]; w++)
             {
-                //out << weights[i-1][j*(layers[i-1]+1)+w] << ",";
                 sum += neuronVals[i-1][w] * weights[i-1][j*(layers[i-1]+1)+w];
             }
 
             // add bias
             sum += weights[i-1][j*(layers[i-1]+1) + layers[i-1]];
-            //out << weights[i-1][j*(layers[i-1]+1) + layers[i-1]] << ",";
 
             // set neuron's final value
             neuronVals[i][j] = sigmoid(sum);
         }
     }
-    //out << "\n";
 
     // determine final output
     vector<double> output(layers[layers.size()-1]);

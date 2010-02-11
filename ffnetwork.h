@@ -4,7 +4,6 @@
 #include <vector>
 
 #include <QObject>
-#include <QFile>
 
 class FFNetwork : public QObject
 {
@@ -24,11 +23,8 @@ private:
     double **weights;
     double **neuronVals;
     double **delta;
-    QFile *file;
-    int row;
 
     double sigmoid(double x);
-    int activationFunc(double x);
 };
 
 #endif // FFNETWORK_H

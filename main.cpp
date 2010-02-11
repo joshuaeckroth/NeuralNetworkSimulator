@@ -1,6 +1,7 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
 
 #include <QDebug>
 #include <QtGui/QApplication>
@@ -44,15 +45,19 @@ int main(int argc, char *argv[])
     }
 
     std::vector<double> output;
-    int total = 0;
-    int correct = 0;
+
     unsigned int *ordering = new unsigned int[inputs.size()];
-    unsigned int ordered = 0;
+    unsigned int ordered;
     unsigned int index;
+    unsigned int epoch = 0;
+    double error;
     bool seen;
     qsrand(std::time(NULL));
-    for(unsigned int epoch = 0; epoch < 100000; epoch++)
+    while(true)
     {
+        epoch++;
+        error = 0.0;
+        ordered = 0;
         while(ordered < inputs.size())
         {
             index = qrand() % inputs.size();
@@ -71,16 +76,15 @@ int main(int argc, char *argv[])
             {
                 ordering[ordered++] = index;
                 output = network.processInput(inputs[index]);
-                if(activationFunc(output[0]) == (int)(expected[index][0])) correct++;
+                error += std::fabs(output[0] - expected[index][0]);
                 network.backprop(output, expected[index]);
-                total++;
             }
         }
-        ordered = 0;
+        if(error/double(inputs.size()) <= 0.05) break;
     }
     delete[] ordering;
 
-    qDebug() << QString("%1/%2 = %3").arg(correct).arg(total).arg(double(correct)/double(total), 5, 'f', 3);
+    qDebug() << QString("# of epochs: %1").arg(epoch);
 
     //QApplication app(argc, argv);
     //MainWindow w;
