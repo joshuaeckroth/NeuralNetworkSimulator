@@ -63,6 +63,13 @@
            </property>
           </spacer>
          </item>
+         <item>
+          <widget class="QPushButton" name="configButton">
+           <property name="text">
+            <string>Config</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>
@@ -70,7 +77,6 @@
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources/>

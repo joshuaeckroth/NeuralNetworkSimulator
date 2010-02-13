@@ -1,16 +1,18 @@
 # -------------------------------------------------
 # Project created by QtCreator 2010-02-09T08:55:32
 # -------------------------------------------------
-#QT += testlib
+# QT += testlib
 TARGET = NeuralNetworkSimulator
 TEMPLATE = app
 SOURCES += main.cpp \
     mainwindow.cpp \
-    ffnetwork.cpp
+    ffnetwork.cpp \
+    config.cpp
 HEADERS += mainwindow.h \
-    ffnetwork.h
-FORMS += mainwindow.ui
+    ffnetwork.h \
+    config.h
+FORMS += mainwindow.ui \
+    config.ui
 INCLUDEPATH += qwt/src
-LIBS += -Lqwt/lib -lqwtd6
-
-
+LIBS += -Lqwt/lib \
+    -lqwtd6

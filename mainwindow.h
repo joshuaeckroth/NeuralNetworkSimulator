@@ -6,9 +6,9 @@
 
 #include <qwt_plot.h>
 #include <qwt_plot_curve.h>
-#include <qwt_scale_engine.h>
 
 #include "ffnetwork.h"
+#include "config.h"
 
 namespace Ui {
     class MainWindow;
@@ -31,13 +31,14 @@ private:
     QwtPlotCurve *curve1;
     QVector<double> epochMilestones;
     QVector<double> errors;
-    QwtLog10ScaleEngine *logScaleEngine;
+    Config *config;
 
 private slots:
     void resume();
     void pause();
     void restart();
     void epochMilestone(int, double);
+    void newConfig();
 };
 
 #endif // MAINWINDOW_H

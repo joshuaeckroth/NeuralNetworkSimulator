@@ -14,20 +14,14 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    config = new Config();
+    connect(ui->configButton, SIGNAL(clicked()), config, SLOT(show()));
+    connect(config, SIGNAL(accepted()), this, SLOT(newConfig()));
+
     plot = new QwtPlot(ui->centralWidget);
     ui->verticalLayout->addWidget(plot);
-    curve1 = new QwtPlotCurve("Curve 1");
-    curve1->setSamples(epochMilestones, errors);
-    curve1->attach(plot);
 
-    logScaleEngine = new QwtLog10ScaleEngine;
-    plot->setAxisScaleEngine(QwtPlot::yLeft, logScaleEngine);
-    plot->setAxisFont(QwtPlot::yLeft, QFont("Calibri", 10));
-    plot->setAxisFont(QwtPlot::xBottom, QFont("Calibri", 10));
-    plot->setAxisTitle(QwtPlot::yLeft, QString("Error (log10 scale)"));
-    plot->setAxisTitle(QwtPlot::xBottom, QString("Epoch"));
-
-    plot->replot();
 
     isRunning = false;
 
@@ -51,6 +45,15 @@ MainWindow::MainWindow(QWidget *parent) :
     unsigned int l[3] = {4,4,1};
     vector<unsigned int> layers(l, l+3);
     network = new FFNetwork(layers, inputs, expected);
+
+    curve1 = new QwtPlotCurve("Curve 1");
+    curve1->setSamples(epochMilestones, errors);
+    curve1->attach(plot);
+
+    plot->setAxisTitle(QwtPlot::yLeft, QString("Error"));
+    plot->setAxisTitle(QwtPlot::xBottom, QString("Epoch"));
+
+    plot->replot();
 
     connect(ui->resumeButton, SIGNAL(clicked()), network, SLOT(resume()));
     connect(ui->resumeButton, SIGNAL(clicked()), this, SLOT(resume()));
@@ -140,4 +143,11 @@ void MainWindow::epochMilestone(int epoch, double error)
     errors << error;
     curve1->setSamples(epochMilestones, errors);
     plot->replot();
+}
+
+void MainWindow::newConfig()
+{
+    qDebug() << QString("Config: eta %1->%2 (by %3); momentum %4; %5 inputs; %6 outputs")
+            .arg(config->getEtaStart()).arg(config->getEtaEnd()).arg(config->getEtaIncrement())
+            .arg(config->getMomentum()).arg(config->getInputNodes()).arg(config->getOutputNodes());
 }
