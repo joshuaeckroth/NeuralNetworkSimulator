@@ -10,3 +10,7 @@ SOURCES += main.cpp \
 HEADERS += mainwindow.h \
     ffnetwork.h
 FORMS += mainwindow.ui
+INCLUDEPATH += qwt/src
+LIBS += -Lqwt/lib -lqwtd6
+
+

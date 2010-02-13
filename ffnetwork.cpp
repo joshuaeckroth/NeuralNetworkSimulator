@@ -11,10 +11,16 @@ using namespace std;
   * Initializes a feed-foward network with the architecture
   * determined by the layers vector.
   */
-FFNetwork::FFNetwork(QObject *parent, vector<unsigned int> _layers) :
-    QObject(parent), layers(_layers)
+FFNetwork::FFNetwork(vector<unsigned int> _layers,
+                     vector<vector<double> > _inputs,
+                     vector<vector<double> > _expected) :
+    layers(_layers), inputs(_inputs), expected(_expected)
 {
     assert(layers.size() > 1);
+
+    isRunning = false;
+    epoch = 0;
+    error = 0.0;
 
     weights = new double*[layers.size() - 1];
 
@@ -42,12 +48,88 @@ FFNetwork::FFNetwork(QObject *parent, vector<unsigned int> _layers) :
 
         delta[i-1] = new double[layers[i]];
     }
+
+    ordering = new unsigned int[inputs.size()];
+
+    qsrand(std::time(NULL));
+
+    fillRandomWeights();
+}
+
+FFNetwork::~FFNetwork()
+{
+    delete[] ordering;
+}
+
+void FFNetwork::run()
+{
+    forever
+    {
+        mutex.lock();
+        if(!isRunning)
+        {
+            running.wait(&mutex);
+        }
+        epoch++;
+        error = 0.0;
+        ordered = 0;
+        while(ordered < inputs.size())
+        {
+            index = qrand() % inputs.size();
+
+            // check if we've seen this number
+            seen = false;
+            for(unsigned int i = 0; i < ordered; i++)
+            {
+                if(ordering[i] == index)
+                {
+                    seen = true;
+                    break;
+                }
+            }
+            if(!seen)
+            {
+                ordering[ordered++] = index;
+                output = processInput(inputs[index]);
+                error += fabs(output[0] - expected[index][0]);
+                backprop(output, expected[index]);
+            }
+        }
+        if(epoch % 1000 == 0)
+        {
+            emit epochMilestone(epoch, error/double(inputs.size()));
+        }
+        mutex.unlock();
+    }
+}
+
+void FFNetwork::restart()
+{
+    mutex.lock();
+    isRunning = false;
+    epoch = 0;
+    error = 0.0;
+    fillRandomWeights();
+    mutex.unlock();
+}
+
+void FFNetwork::pause()
+{
+    mutex.lock();
+    isRunning = false;
+    mutex.unlock();
+}
+
+void FFNetwork::resume()
+{
+    mutex.lock();
+    isRunning = true;
+    running.wakeAll();
+    mutex.unlock();
 }
 
 void FFNetwork::fillRandomWeights()
 {
-    srand(time(NULL));
-
     for(unsigned int i = 1; i < layers.size(); i++)
     {
         for(unsigned int j = 0; j < (layers[i]*layers[i-1] + layers[i]); j++)
