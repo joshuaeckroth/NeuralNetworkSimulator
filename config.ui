@@ -29,6 +29,9 @@
      <property name="singleStep">
       <double>0.050000000000000</double>
      </property>
+     <property name="value">
+      <double>0.050000000000000</double>
+     </property>
     </widget>
    </item>
    <item row="0" column="2">
@@ -46,6 +49,9 @@
      <property name="singleStep">
       <double>0.050000000000000</double>
      </property>
+     <property name="value">
+      <double>0.500000000000000</double>
+     </property>
     </widget>
    </item>
    <item row="0" column="4">
@@ -61,6 +67,9 @@
    <item row="0" column="5">
     <widget class="QDoubleSpinBox" name="etaIncrementSpinBox">
      <property name="singleStep">
+      <double>0.050000000000000</double>
+     </property>
+     <property name="value">
       <double>0.050000000000000</double>
      </property>
     </widget>

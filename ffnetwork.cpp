@@ -75,7 +75,10 @@ void FFNetwork::run()
             running.wait(&mutex);
         }
         if(quitNow)
+        {
+            mutex.unlock();
             return;
+        }
 
         epoch++;
         error = 0.0;
@@ -139,6 +142,7 @@ void FFNetwork::quit()
 {
     mutex.lock();
     quitNow = true;
+    isRunning = true;
     running.wakeAll();
     mutex.unlock();
 }

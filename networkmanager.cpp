@@ -69,6 +69,12 @@ void NetworkManager::networksFromConfig(Config *c)
     double etaIncrement = c->getEtaIncrement();
     double momentum = c->getMomentum();
 
+    if(etaEnd < 0.00001)
+    {
+        numNetworks = 0;
+        mutex.unlock();
+        return;
+    }
     // determine number of networks
     numNetworks = int(floor((etaEnd - etaStart)/etaIncrement));
     networks = new FFNetwork*[numNetworks];
@@ -96,13 +102,13 @@ void NetworkManager::networksFromConfig(Config *c)
 void NetworkManager::epochMilestone(int id, int epoch, double error)
 {
     mutex.lock();
-    *epochMilestones[id] << double(epoch);
-    *errors[id] << error;
-    curves[id]->setSamples(*epochMilestones[id], *errors[id]);
-    plot->replot();
-
     if(isRunning)
     {
+        *epochMilestones[id] << double(epoch);
+        *errors[id] << error;
+        curves[id]->setSamples(*epochMilestones[id], *errors[id]);
+        plot->replot();
+
         // pause faster networks
         if(minEpochMilestone < 0.0)
             minEpochMilestone = double(epoch);
@@ -161,5 +167,6 @@ void NetworkManager::restart()
         errors[i]->clear();
         curves[i]->setSamples(*epochMilestones[i], *errors[i]);
     }
+    plot->replot();
     mutex.unlock();
 }

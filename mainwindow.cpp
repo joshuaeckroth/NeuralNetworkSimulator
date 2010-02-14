@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     config = new Config();
     connect(ui->configButton, SIGNAL(clicked()), config, SLOT(show()));
     connect(config, SIGNAL(accepted()), this, SLOT(newConfig()));
+    connect(config, SIGNAL(accepted()), this, SLOT(restart()));
 
     plot = new QwtPlot(ui->centralWidget);
     ui->verticalLayout->addWidget(plot);
@@ -85,8 +86,7 @@ void MainWindow::restart()
 
 void MainWindow::newConfig()
 {
+    mutex.lock();
     networkManager->networksFromConfig(config);
-    qDebug() << QString("Config: eta %1->%2 (by %3); momentum %4; %5 inputs; %6 outputs")
-            .arg(config->getEtaStart()).arg(config->getEtaEnd()).arg(config->getEtaIncrement())
-            .arg(config->getMomentum()).arg(config->getInputNodes()).arg(config->getOutputNodes());
+    mutex.unlock();
 }
