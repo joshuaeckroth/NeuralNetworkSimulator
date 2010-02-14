@@ -3,12 +3,13 @@
 
 #include <QMainWindow>
 #include <QVector>
+#include <QMutex>
 
 #include <qwt_plot.h>
-#include <qwt_plot_curve.h>
 
-#include "ffnetwork.h"
 #include "config.h"
+
+class NetworkManager;
 
 namespace Ui {
     class MainWindow;
@@ -25,19 +26,15 @@ protected:
 
 private:
     Ui::MainWindow *ui;
-    FFNetwork *network;
-    bool isRunning;
+    NetworkManager *networkManager;
     QwtPlot *plot;
-    QwtPlotCurve *curve1;
-    QVector<double> epochMilestones;
-    QVector<double> errors;
     Config *config;
+    QMutex mutex;
 
 private slots:
     void resume();
     void pause();
     void restart();
-    void epochMilestone(int, double);
     void newConfig();
 };
 

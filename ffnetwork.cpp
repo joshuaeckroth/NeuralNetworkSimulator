@@ -11,10 +11,14 @@ using namespace std;
   * Initializes a feed-foward network with the architecture
   * determined by the layers vector.
   */
-FFNetwork::FFNetwork(vector<unsigned int> _layers,
+FFNetwork::FFNetwork(int _id,
+                     std::vector<unsigned int>_layers,
+                     double _eta,
+                     double _momentum,
                      vector<vector<double> > _inputs,
                      vector<vector<double> > _expected) :
-    layers(_layers), inputs(_inputs), expected(_expected)
+    id(_id), layers(_layers), inputs(_inputs), expected(_expected),
+    eta(_eta), momentum(_momentum)
 {
     assert(layers.size() > 1);
 
@@ -97,7 +101,7 @@ void FFNetwork::run()
         }
         if(epoch % 1000 == 0)
         {
-            emit epochMilestone(epoch, error/double(inputs.size()));
+            emit epochMilestone(id, epoch, error/double(inputs.size()));
         }
         mutex.unlock();
     }
@@ -186,7 +190,6 @@ void FFNetwork::backprop(vector<double> output, vector<double> expected)
 {
     assert(output.size() == expected.size());
 
-    double eta = 0.5;
     double sum;
 
     // adjust weights on output layer

@@ -7,10 +7,12 @@ TEMPLATE = app
 SOURCES += main.cpp \
     mainwindow.cpp \
     ffnetwork.cpp \
-    config.cpp
+    config.cpp \
+    networkmanager.cpp
 HEADERS += mainwindow.h \
     ffnetwork.h \
-    config.h
+    config.h \
+    networkmanager.h
 FORMS += mainwindow.ui \
     config.ui
 INCLUDEPATH += qwt/src

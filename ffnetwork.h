@@ -11,27 +11,31 @@ class FFNetwork : public QThread
 {
 Q_OBJECT
 public:
-    FFNetwork(std::vector<unsigned int> _layers,
+    FFNetwork(int _id,
+              std::vector<unsigned int> _layers,
+              double _eta,
+              double _momentum,
               std::vector<std::vector<double> > _inputs,
               std::vector<std::vector<double> > _expected);
     ~FFNetwork();
-    void run();
-
-signals:
-    void epochMilestone(int epoch, double error);
-
-public slots:
     void restart();
     void pause();
     void resume();
+    void run();
+
+signals:
+    void epochMilestone(int id, int epoch, double error);
 
 private:
+    int id;
     std::vector<unsigned int> layers;
     std::vector<std::vector<double> > inputs;
     std::vector<std::vector<double> > expected;
     double **weights;
     double **neuronVals;
     double **delta;
+    double eta;
+    double momentum;
     QMutex mutex;
     QWaitCondition running;
     bool isRunning;
