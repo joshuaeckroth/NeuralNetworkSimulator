@@ -24,6 +24,9 @@ public slots:
     void pause();
     void restart();
 
+signals:
+    void stopped();
+
 private slots:
     void epochMilestone(int, int, double);
 

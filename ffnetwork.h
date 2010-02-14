@@ -15,9 +15,11 @@ public:
               std::vector<unsigned int> _layers,
               double _eta,
               double _momentum,
+              double _stop,
               std::vector<std::vector<double> > _inputs,
               std::vector<std::vector<double> > _expected);
     ~FFNetwork();
+    bool isSuccessful() const;
     void restart();
     void pause();
     void resume();
@@ -38,9 +40,10 @@ private:
     double **delta;
     double eta;
     double momentum;
+    double stop;
     QMutex mutex;
-    QWaitCondition running;
-    bool isRunning;
+    QWaitCondition runningCond;
+    bool running;
     unsigned int epoch;
     double error;
     unsigned int *ordering;
@@ -49,6 +52,7 @@ private:
     bool seen;
     std::vector<double> output;
     bool quitNow;
+    bool successful;
 
     void fillRandomWeights();
     std::vector<double> processInput(std::vector<double> input);

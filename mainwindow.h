@@ -35,6 +35,7 @@ private slots:
     void resume();
     void pause();
     void restart();
+    void stopped();
     void newConfig();
 };
 

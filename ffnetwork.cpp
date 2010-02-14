@@ -15,14 +15,15 @@ FFNetwork::FFNetwork(int _id,
                      std::vector<unsigned int>_layers,
                      double _eta,
                      double _momentum,
+                     double _stop,
                      vector<vector<double> > _inputs,
                      vector<vector<double> > _expected) :
     id(_id), layers(_layers), inputs(_inputs), expected(_expected),
-    eta(_eta), momentum(_momentum), quitNow(false)
+    eta(_eta), momentum(_momentum), stop(_stop), quitNow(false), successful(false)
 {
     assert(layers.size() > 1);
 
-    isRunning = false;
+    running = false;
     epoch = 0;
     error = 0.0;
 
@@ -70,9 +71,9 @@ void FFNetwork::run()
     forever
     {
         mutex.lock();
-        while(!isRunning)
+        while(!running)
         {
-            running.wait(&mutex);
+            runningCond.wait(&mutex);
         }
         if(quitNow)
         {
@@ -109,14 +110,26 @@ void FFNetwork::run()
         {
             emit epochMilestone(id, epoch, error/double(inputs.size()));
         }
+        if(error/double(inputs.size()) < stop)
+        {
+            emit epochMilestone(id, epoch, error/double(inputs.size()));
+            running = false;
+            successful = true;
+        }
         mutex.unlock();
     }
+}
+
+bool FFNetwork::isSuccessful() const
+{
+    return successful;
 }
 
 void FFNetwork::restart()
 {
     mutex.lock();
-    isRunning = false;
+    running = false;
+    successful = false;
     epoch = 0;
     error = 0.0;
     fillRandomWeights();
@@ -126,15 +139,18 @@ void FFNetwork::restart()
 void FFNetwork::pause()
 {
     mutex.lock();
-    isRunning = false;
+    running = false;
     mutex.unlock();
 }
 
 void FFNetwork::resume()
 {
     mutex.lock();
-    isRunning = true;
-    running.wakeAll();
+    if(!successful)
+    {
+        running = true;
+        runningCond.wakeAll();
+    }
     mutex.unlock();
 }
 
@@ -142,8 +158,8 @@ void FFNetwork::quit()
 {
     mutex.lock();
     quitNow = true;
-    isRunning = true;
-    running.wakeAll();
+    running = true;
+    runningCond.wakeAll();
     mutex.unlock();
 }
 

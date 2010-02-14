@@ -22,6 +22,8 @@ public:
     int getInputNodes() const;
     int getOutputNodes() const;
 
+    double getStop() const;
+
 private:
     Ui::ConfigDialog *ui;
 };

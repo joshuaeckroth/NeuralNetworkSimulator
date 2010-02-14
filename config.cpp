@@ -37,3 +37,8 @@ int Config::getOutputNodes() const
 {
     return ui->outputSpinBox->value();
 }
+
+double Config::getStop() const
+{
+    return ui->stopSpinBox->value();
+}

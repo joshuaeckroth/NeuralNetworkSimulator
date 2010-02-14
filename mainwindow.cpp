@@ -35,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->pauseButton, SIGNAL(clicked()), networkManager, SLOT(pause()));
     connect(ui->restartButton, SIGNAL(clicked()), this, SLOT(restart()));
     connect(ui->restartButton, SIGNAL(clicked()), networkManager, SLOT(restart()));
+    connect(networkManager, SIGNAL(stopped()), this, SLOT(stopped()));
 }
 
 MainWindow::~MainWindow()
@@ -81,6 +82,16 @@ void MainWindow::restart()
     ui->resumeButton->setDisabled(false);
     ui->pauseButton->setDisabled(true);
     ui->restartButton->setDisabled(true);
+    mutex.unlock();
+}
+
+void MainWindow::stopped()
+{
+    mutex.lock();
+    ui->resumeButton->setText("Start");
+    ui->resumeButton->setDisabled(true);
+    ui->pauseButton->setDisabled(true);
+    ui->restartButton->setDisabled(false);
     mutex.unlock();
 }
 

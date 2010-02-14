@@ -13,6 +13,7 @@ using namespace std;
 #include <QBrush>
 #include <QColor>
 #include <QChar>
+#include <QDebug>
 
 #include "networkmanager.h"
 #include "ffnetwork.h"
@@ -80,6 +81,7 @@ void NetworkManager::networksFromConfig(Config *c)
     double etaEnd = c->getEtaEnd();
     double etaIncrement = c->getEtaIncrement();
     double momentum = c->getMomentum();
+    double stop = c->getStop();
 
     if(etaEnd < 0.00001)
     {
@@ -88,7 +90,7 @@ void NetworkManager::networksFromConfig(Config *c)
         return;
     }
     // determine number of networks
-    numNetworks = int(ceil((etaEnd - etaStart + etaIncrement)/etaIncrement));
+    numNetworks = int(floor((etaEnd - etaStart)/etaIncrement)) + 1;
     networks = new FFNetwork*[numNetworks];
     epochMilestones = new QVector<double>*[numNetworks];
     errors = new QVector<double>*[numNetworks];
@@ -103,7 +105,7 @@ void NetworkManager::networksFromConfig(Config *c)
         r = qrand() % 256;
         g = qrand() % 256;
         b = qrand() % 256;
-        networks[i] = new FFNetwork(i, layers, eta, momentum, inputs, expected);
+        networks[i] = new FFNetwork(i, layers, eta, momentum, stop, inputs, expected);
         connect(networks[i], SIGNAL(epochMilestone(int, int, double)),
                 this, SLOT(epochMilestone(int, int, double)));
         networks[i]->start(QThread::IdlePriority);
@@ -124,12 +126,29 @@ void NetworkManager::networksFromConfig(Config *c)
 void NetworkManager::epochMilestone(int id, int epoch, double error)
 {
     mutex.lock();
+
+    *epochMilestones[id] << double(epoch);
+    *errors[id] << error;
+    curves[id]->setSamples(*epochMilestones[id], *errors[id]);
+    plot->replot();
+
     if(isRunning)
     {
-        *epochMilestones[id] << double(epoch);
-        *errors[id] << error;
-        curves[id]->setSamples(*epochMilestones[id], *errors[id]);
-        plot->replot();
+        bool someRunning = false;
+        for(int i = 0; i < numNetworks; i++)
+        {
+            if(!networks[i]->isSuccessful())
+            {
+                someRunning = true;
+            }
+        }
+        if(!someRunning)
+        {
+            isRunning = false;
+            emit stopped();
+            mutex.unlock();
+            return;
+        }
 
         // pause faster networks
         if(minEpochMilestone < 0.0)
@@ -139,6 +158,7 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
             double newMinEpochMilestone = double(epoch);
             for(int i = 0; i < numNetworks; i++)
             {
+                if(networks[i]->isSuccessful()) continue;
                 if(epochMilestones[i]->isEmpty()) continue;
                 if(epochMilestones[i]->last() < newMinEpochMilestone)
                     newMinEpochMilestone = epochMilestones[i]->last();
@@ -146,7 +166,9 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
             minEpochMilestone = newMinEpochMilestone;
             for(int i = 0; i < numNetworks; i++)
             {
-                if(!epochMilestones[i]->isEmpty() && epochMilestones[i]->last() > minEpochMilestone)
+                if(networks[i]->isSuccessful()) continue;
+                if(!epochMilestones[i]->isEmpty()
+                    && epochMilestones[i]->last() > minEpochMilestone)
                     networks[i]->pause();
                 else
                     networks[i]->resume();
