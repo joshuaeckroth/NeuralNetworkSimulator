@@ -27,6 +27,7 @@ FFNetwork::FFNetwork(int _id,
     error = 0.0;
 
     weights = new double*[layers.size() - 1];
+    prevWeightUpdates = new double*[layers.size() - 1];
 
     // need #layers neuron values because neuronVals[0] will hold input values
     neuronVals = new double*[layers.size()];
@@ -45,6 +46,7 @@ FFNetwork::FFNetwork(int _id,
         // weights[i-1][j*(p+1)], weights[i-1][j*(p+1)+1], ..., weights[i-1][j*(p+1)+(p-1)]
         // with bias weights[i-1][j*(p+1)+p]
         weights[i-1] = new double[layers[i]*layers[i-1] + layers[i]];
+        prevWeightUpdates[i-1] = new double[layers[i]*layers[i-1] + layers[i]];
 
         // since each layer has n neurons, we need n cells to hold the output
         // of each neuron (-1 or 1)
@@ -153,6 +155,9 @@ void FFNetwork::fillRandomWeights()
         {
             // random floating-point number between -1 and 1
             weights[i-1][j] = (rand() - RAND_MAX/2)/static_cast<double>(RAND_MAX/2);
+
+            // set previous weight update to 0.0
+            prevWeightUpdates[i-1][j] = 0.0;
         }
     }
 }
@@ -204,6 +209,8 @@ void FFNetwork::backprop(vector<double> output, vector<double> expected)
     assert(output.size() == expected.size());
 
     double sum;
+    double weightUpdate;
+    int weightIndexA, weightIndexB;
 
     // adjust weights on output layer
 
@@ -216,12 +223,21 @@ void FFNetwork::backprop(vector<double> output, vector<double> expected)
         // (ignore bias when counting with w)
         for(unsigned int w = 0; w < layers[layers.size()-2]; w++)
         {
-            weights[layers.size()-2][j*(layers[layers.size()-2]+1) + w] +=
-                eta * delta[layers.size()-2][j] * neuronVals[layers.size()-2][w];
+            weightIndexA = layers.size()-2;
+            weightIndexB = j*(layers[layers.size()-2]+1) + w;
+
+            weightUpdate = eta * delta[layers.size()-2][j] * neuronVals[layers.size()-2][w] +
+                           momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+            weights[weightIndexA][weightIndexB] += weightUpdate;
+            prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
         }
         // update bias
-        weights[layers.size()-2][j*(layers[layers.size()-2]+1) + layers[layers.size()-2]] +=
-                eta * delta[layers.size()-2][j];
+        weightIndexA = layers.size()-2;
+        weightIndexB = j*(layers[layers.size()-2]+1) + layers[layers.size()-2];
+        weightUpdate = eta * delta[layers.size()-2][j]
+                       + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+        weights[weightIndexA][weightIndexB] += weightUpdate;
+        prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
     }
 
     // for each hidden layer (backwards)
@@ -242,10 +258,20 @@ void FFNetwork::backprop(vector<double> output, vector<double> expected)
             // (ignore bias when counting with w)
             for(unsigned int w = 0; w < layers[i-1]; w++)
             {
-                weights[i-1][j*(layers[i]+1) + w] += eta * delta[i-1][j] * neuronVals[i-i][w];
+                weightIndexA = i-1;
+                weightIndexB = j*(layers[i]+1) + w;
+                weightUpdate = eta * delta[i-1][j] * neuronVals[i-i][w]
+                               + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+                weights[weightIndexA][weightIndexB] += weightUpdate;
+                prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
             }
             // update bias
-            weights[i-1][j*(layers[i]+1) + layers[i]] += eta * delta[i-1][j];
+            weightIndexA = i-1;
+            weightIndexB = j*(layers[i]+1) + layers[i];
+            weightUpdate = eta * delta[i-1][j]
+                           + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+            weights[weightIndexA][weightIndexB] += weightUpdate;
+            prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
         }
     }
 }

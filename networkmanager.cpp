@@ -111,7 +111,10 @@ void NetworkManager::networksFromConfig(Config *c)
         errors[i] = new QVector<double>;
         curves[i] = new QwtPlotCurve;
         curves[i]->setPen(QPen(QBrush(QColor(r,g,b)), 2.0));
-        curves[i]->setTitle((QString(QChar(0x03B7))+QString(" = %1")).arg(eta, 3, 'f', 2));
+        curves[i]->setTitle((QString(QChar(0x03B7))+QString(" = %1, ")+
+                             QString(QChar(0x03B1))+QString(" = %2"))
+                            .arg(eta, 3, 'f', 2)
+                            .arg(momentum, 3, 'f', 2));
         curves[i]->setRenderHint(QwtPlotCurve::RenderAntialiased, true);
         curves[i]->attach(plot);
     }

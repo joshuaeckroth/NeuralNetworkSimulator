@@ -33,6 +33,7 @@ private:
     std::vector<std::vector<double> > inputs;
     std::vector<std::vector<double> > expected;
     double **weights;
+    double **prevWeightUpdates;
     double **neuronVals;
     double **delta;
     double eta;
