@@ -55,8 +55,6 @@ FFNetwork::FFNetwork(int _id,
 
     ordering = new unsigned int[inputs.size()];
 
-    qsrand(std::time(NULL));
-
     fillRandomWeights();
 }
 

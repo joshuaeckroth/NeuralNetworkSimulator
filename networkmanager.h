@@ -8,6 +8,7 @@
 class Config;
 class FFNetwork;
 class QwtPlot;
+class QwtLegend;
 class QwtPlotCurve;
 
 class NetworkManager : public QObject
@@ -30,6 +31,7 @@ private:
     int numNetworks;
     FFNetwork **networks;
     QwtPlot *plot;
+    QwtLegend *legend;
     QwtPlotCurve **curves;
     QVector<double> **epochMilestones;
     QVector<double> **errors;

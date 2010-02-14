@@ -1,10 +1,18 @@
 #include <cmath>
 #include <vector>
+#include <cstdlib>
+#include <ctime>
 using namespace std;
 
 #include <qwt_plot.h>
 #include <qwt_plot_curve.h>
 #include <qwt_series_data.h>
+#include <qwt_legend.h>
+
+#include <QPen>
+#include <QBrush>
+#include <QColor>
+#include <QChar>
 
 #include "networkmanager.h"
 #include "ffnetwork.h"
@@ -14,6 +22,9 @@ NetworkManager::NetworkManager(QwtPlot *_plot)
     : numNetworks(0), networks(NULL), plot(_plot), curves(NULL),
     minEpochMilestone(-1.0), isRunning(false)
 {
+    legend = new QwtLegend;
+    plot->insertLegend(legend, QwtPlot::RightLegend);
+    plot->setCanvasBackground(QColor(255,255,255));
 }
 
 void NetworkManager::networksFromConfig(Config *c)
@@ -40,6 +51,7 @@ void NetworkManager::networksFromConfig(Config *c)
         delete[] epochMilestones;
         delete[] errors;
         delete[] curves;
+        legend->clear();
         networks = NULL;
     }
     plot->replot();
@@ -76,7 +88,7 @@ void NetworkManager::networksFromConfig(Config *c)
         return;
     }
     // determine number of networks
-    numNetworks = int(floor((etaEnd - etaStart)/etaIncrement));
+    numNetworks = int(ceil((etaEnd - etaStart + etaIncrement)/etaIncrement));
     networks = new FFNetwork*[numNetworks];
     epochMilestones = new QVector<double>*[numNetworks];
     errors = new QVector<double>*[numNetworks];
@@ -85,15 +97,22 @@ void NetworkManager::networksFromConfig(Config *c)
     // for each eta, create a network
     double eta;
     int i;
+    int r, g, b;
     for(eta = etaStart, i = 0; i < numNetworks; eta += etaIncrement, i++)
     {
+        r = qrand() % 256;
+        g = qrand() % 256;
+        b = qrand() % 256;
         networks[i] = new FFNetwork(i, layers, eta, momentum, inputs, expected);
         connect(networks[i], SIGNAL(epochMilestone(int, int, double)),
                 this, SLOT(epochMilestone(int, int, double)));
-        networks[i]->start();
+        networks[i]->start(QThread::IdlePriority);
         epochMilestones[i] = new QVector<double>;
         errors[i] = new QVector<double>;
         curves[i] = new QwtPlotCurve;
+        curves[i]->setPen(QPen(QBrush(QColor(r,g,b)), 2.0));
+        curves[i]->setTitle((QString(QChar(0x03B7))+QString(" = %1")).arg(eta, 3, 'f', 2));
+        curves[i]->setRenderHint(QwtPlotCurve::RenderAntialiased, true);
         curves[i]->attach(plot);
     }
     mutex.unlock();
