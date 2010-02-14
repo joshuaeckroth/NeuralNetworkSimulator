@@ -11,16 +11,21 @@ using namespace std;
 #include "config.h"
 
 NetworkManager::NetworkManager(QwtPlot *_plot)
-    : numNetworks(0), networks(NULL), plot(_plot), curves(NULL)
+    : numNetworks(0), networks(NULL), plot(_plot), curves(NULL),
+    minEpochMilestone(-1.0), isRunning(false)
 {
 }
 
 void NetworkManager::networksFromConfig(Config *c)
 {
+    mutex.lock();
+    isRunning = false;
+
     // stop and delete existing networks
     for(int i = 0; i < numNetworks; i++)
     {
-        networks[i]->pause();
+        networks[i]->quit();
+        networks[i]->wait();
         disconnect(networks[i], SIGNAL(epochMilestone(int,int,double)),
                    this, SLOT(epochMilestone(int,int,double)));
         delete networks[i];
@@ -85,6 +90,7 @@ void NetworkManager::networksFromConfig(Config *c)
         curves[i] = new QwtPlotCurve;
         curves[i]->attach(plot);
     }
+    mutex.unlock();
 }
 
 void NetworkManager::epochMilestone(int id, int epoch, double error)
@@ -94,12 +100,38 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
     *errors[id] << error;
     curves[id]->setSamples(*epochMilestones[id], *errors[id]);
     plot->replot();
+
+    if(isRunning)
+    {
+        // pause faster networks
+        if(minEpochMilestone < 0.0)
+            minEpochMilestone = double(epoch);
+        else
+        {
+            double newMinEpochMilestone = double(epoch);
+            for(int i = 0; i < numNetworks; i++)
+            {
+                if(epochMilestones[i]->isEmpty()) continue;
+                if(epochMilestones[i]->last() < newMinEpochMilestone)
+                    newMinEpochMilestone = epochMilestones[i]->last();
+            }
+            minEpochMilestone = newMinEpochMilestone;
+            for(int i = 0; i < numNetworks; i++)
+            {
+                if(!epochMilestones[i]->isEmpty() && epochMilestones[i]->last() > minEpochMilestone)
+                    networks[i]->pause();
+                else
+                    networks[i]->resume();
+            }
+        }
+    }
     mutex.unlock();
 }
 
 void NetworkManager::resume()
 {
     mutex.lock();
+    isRunning = true;
     for(int i = 0; i < numNetworks; i++)
     {
         networks[i]->resume();
@@ -110,6 +142,7 @@ void NetworkManager::resume()
 void NetworkManager::pause()
 {
     mutex.lock();
+    isRunning = false;
     for(int i = 0; i < numNetworks; i++)
     {
         networks[i]->pause();
@@ -120,6 +153,7 @@ void NetworkManager::pause()
 void NetworkManager::restart()
 {
     mutex.lock();
+    isRunning = false;
     for(int i = 0; i < numNetworks; i++)
     {
         networks[i]->restart();

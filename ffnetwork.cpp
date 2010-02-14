@@ -18,7 +18,7 @@ FFNetwork::FFNetwork(int _id,
                      vector<vector<double> > _inputs,
                      vector<vector<double> > _expected) :
     id(_id), layers(_layers), inputs(_inputs), expected(_expected),
-    eta(_eta), momentum(_momentum)
+    eta(_eta), momentum(_momentum), quitNow(false)
 {
     assert(layers.size() > 1);
 
@@ -70,10 +70,13 @@ void FFNetwork::run()
     forever
     {
         mutex.lock();
-        if(!isRunning)
+        while(!isRunning)
         {
             running.wait(&mutex);
         }
+        if(quitNow)
+            return;
+
         epoch++;
         error = 0.0;
         ordered = 0;
@@ -128,6 +131,14 @@ void FFNetwork::resume()
 {
     mutex.lock();
     isRunning = true;
+    running.wakeAll();
+    mutex.unlock();
+}
+
+void FFNetwork::quit()
+{
+    mutex.lock();
+    quitNow = true;
     running.wakeAll();
     mutex.unlock();
 }

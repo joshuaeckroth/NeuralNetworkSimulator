@@ -22,6 +22,7 @@ public:
     void pause();
     void resume();
     void run();
+    void quit();
 
 signals:
     void epochMilestone(int id, int epoch, double error);
@@ -46,6 +47,7 @@ private:
     unsigned int index;
     bool seen;
     std::vector<double> output;
+    bool quitNow;
 
     void fillRandomWeights();
     std::vector<double> processInput(std::vector<double> input);

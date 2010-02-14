@@ -34,6 +34,8 @@ private:
     QVector<double> **epochMilestones;
     QVector<double> **errors;
     QMutex mutex;
+    double minEpochMilestone;
+    bool isRunning;
 };
 
 #endif // NETWORKMANAGER_H
