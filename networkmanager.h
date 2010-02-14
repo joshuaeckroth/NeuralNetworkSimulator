@@ -1,6 +1,8 @@
 #ifndef NETWORKMANAGER_H
 #define NETWORKMANAGER_H
 
+#include <map>
+
 #include <QObject>
 #include <QVector>
 #include <QMutex>
@@ -10,6 +12,8 @@ class FFNetwork;
 class QwtPlot;
 class QwtLegend;
 class QwtPlotCurve;
+class QwtPlotItem;
+class QwtPlotMarker;
 
 class NetworkManager : public QObject
 {
@@ -29,6 +33,7 @@ signals:
 
 private slots:
     void epochMilestone(int, int, double);
+    void legendChecked(QwtPlotItem*, bool);
 
 private:
     int numNetworks;
@@ -41,6 +46,10 @@ private:
     QMutex mutex;
     double minEpochMilestone;
     bool isRunning;
+    std::map<QwtPlotCurve*, bool> highlightedCurves;
+    std::map<QwtPlotCurve*, QwtPlotMarker*> markers;
+
+    void updateMarker(QwtPlotMarker *curve, double epoch, double error);
 };
 
 #endif // NETWORKMANAGER_H

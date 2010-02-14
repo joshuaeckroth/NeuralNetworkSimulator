@@ -1,5 +1,6 @@
 #include <cmath>
 #include <vector>
+#include <map>
 #include <cstdlib>
 #include <ctime>
 using namespace std;
@@ -8,6 +9,7 @@ using namespace std;
 #include <qwt_plot_curve.h>
 #include <qwt_series_data.h>
 #include <qwt_legend.h>
+#include <qwt_plot_marker.h>
 
 #include <QPen>
 #include <QBrush>
@@ -24,8 +26,11 @@ NetworkManager::NetworkManager(QwtPlot *_plot)
     minEpochMilestone(-1.0), isRunning(false)
 {
     legend = new QwtLegend;
+    legend->setItemMode(QwtLegend::CheckableItem);
     plot->insertLegend(legend, QwtPlot::RightLegend);
     plot->setCanvasBackground(QColor(255,255,255));
+    connect(plot, SIGNAL(legendChecked(QwtPlotItem*, bool)),
+            this, SLOT(legendChecked(QwtPlotItem*, bool)));
 }
 
 void NetworkManager::networksFromConfig(Config *c)
@@ -53,6 +58,8 @@ void NetworkManager::networksFromConfig(Config *c)
         delete[] errors;
         delete[] curves;
         legend->clear();
+        highlightedCurves.clear();
+        markers.clear();
         networks = NULL;
     }
     plot->replot();
@@ -119,6 +126,8 @@ void NetworkManager::networksFromConfig(Config *c)
                             .arg(momentum, 3, 'f', 2));
         curves[i]->setRenderHint(QwtPlotCurve::RenderAntialiased, true);
         curves[i]->attach(plot);
+        highlightedCurves[curves[i]] = false;
+        markers[curves[i]] = NULL;
     }
     mutex.unlock();
 }
@@ -130,6 +139,10 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
     *epochMilestones[id] << double(epoch);
     *errors[id] << error;
     curves[id]->setSamples(*epochMilestones[id], *errors[id]);
+    if(highlightedCurves[curves[id]])
+    {
+        updateMarker(markers[curves[id]], double(epoch), error);
+    }
     plot->replot();
 
     if(isRunning)
@@ -185,6 +198,8 @@ void NetworkManager::resume()
     for(int i = 0; i < numNetworks; i++)
     {
         networks[i]->resume();
+        if(markers[curves[i]] != NULL)
+            markers[curves[i]]->show();
     }
     mutex.unlock();
 }
@@ -210,7 +225,50 @@ void NetworkManager::restart()
         epochMilestones[i]->clear();
         errors[i]->clear();
         curves[i]->setSamples(*epochMilestones[i], *errors[i]);
+        if(markers[curves[i]] != NULL)
+            markers[curves[i]]->hide();
     }
     plot->replot();
     mutex.unlock();
+}
+
+void NetworkManager::legendChecked(QwtPlotItem *item, bool on)
+{
+    QwtPlotCurve *curve = dynamic_cast<QwtPlotCurve*>(item);
+    // determine id
+    int id;
+    for(id = 0; id < numNetworks; id++)
+    {
+        if(curves[id] == curve) break;
+    }
+    if(id == numNetworks) return; // shouldn't happen
+
+    highlightedCurves[curve] = on;
+    QPen pen = curve->pen();
+    if(on)
+    {
+        pen.setWidth(4);
+        markers[curve] = new QwtPlotMarker;
+        markers[curve]->setRenderHint(QwtPlotItem::RenderAntialiased, true);
+        updateMarker(markers[curve], epochMilestones[id]->last(), errors[id]->last());
+        markers[curve]->attach(plot);
+    }
+    else
+    {
+        pen.setWidth(2);
+        markers[curve]->detach();
+        delete markers[curve];
+        markers[curve] = NULL;
+    }
+    curve->setPen(pen);
+    plot->replot();
+}
+
+void NetworkManager::updateMarker(QwtPlotMarker *marker, double epoch, double error)
+{
+    marker->setXValue(epoch + 500);
+    marker->setYValue(error - 0.01);
+    marker->setLabel(QwtText(QString("%1 (%2)")
+                             .arg(epoch)
+                             .arg(error, 3, 'f', 2)));
 }
