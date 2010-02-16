@@ -19,13 +19,27 @@ public:
 
     double getMomentum() const;
 
-    int getInputNodes() const;
-    int getOutputNodes() const;
+    unsigned int getAveraged() const;
+
+    unsigned int getInputNodes() const;
+    unsigned int getOutputNodes() const;
 
     double getStop() const;
 
+private slots:
+    void saveConfig();
+    void cancelConfig();
+
 private:
     Ui::ConfigDialog *ui;
+    double etaStart;
+    double etaEnd;
+    double etaIncrement;
+    double momentum;
+    unsigned int averaged;
+    unsigned int inputNodes;
+    unsigned int outputNodes;
+    double stop;
 };
 
 #endif // CONFIG_H

@@ -48,6 +48,11 @@ void NetworkManager::networksFromConfig(Config *c)
         delete networks[i];
         delete epochMilestones[i];
         delete errors[i];
+        if(markers[curves[i]] != NULL)
+        {
+            markers[curves[i]]->detach();
+            delete markers[curves[i]];
+        }
         curves[i]->detach();
         delete curves[i];
     }
@@ -88,6 +93,7 @@ void NetworkManager::networksFromConfig(Config *c)
     double etaEnd = c->getEtaEnd();
     double etaIncrement = c->getEtaIncrement();
     double momentum = c->getMomentum();
+    unsigned int averaged = c->getAveraged();
     double stop = c->getStop();
 
     if(etaEnd < 0.00001)
@@ -112,7 +118,7 @@ void NetworkManager::networksFromConfig(Config *c)
         r = qrand() % 256;
         g = qrand() % 256;
         b = qrand() % 256;
-        networks[i] = new FFNetwork(i, layers, eta, momentum, stop, inputs, expected);
+        networks[i] = new FFNetwork(i, layers, eta, momentum, averaged, stop, inputs, expected);
         connect(networks[i], SIGNAL(epochMilestone(int, int, double)),
                 this, SLOT(epochMilestone(int, int, double)));
         networks[i]->start(QThread::IdlePriority);

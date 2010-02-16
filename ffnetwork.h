@@ -15,6 +15,7 @@ public:
               std::vector<unsigned int> _layers,
               double _eta,
               double _momentum,
+              unsigned int _averaged,
               double _stop,
               std::vector<std::vector<double> > _inputs,
               std::vector<std::vector<double> > _expected);
@@ -34,12 +35,13 @@ private:
     std::vector<unsigned int> layers;
     std::vector<std::vector<double> > inputs;
     std::vector<std::vector<double> > expected;
-    double **weights;
-    double **prevWeightUpdates;
-    double **neuronVals;
-    double **delta;
+    double ***weights;
+    double ***prevWeightUpdates;
+    double ***neuronVals;
+    double ***delta;
     double eta;
     double momentum;
+    unsigned int averaged;
     double stop;
     QMutex mutex;
     QWaitCondition runningCond;
@@ -50,13 +52,13 @@ private:
     unsigned int ordered;
     unsigned int index;
     bool seen;
-    std::vector<double> output;
+    std::vector<double> *output;
     bool quitNow;
     bool successful;
 
     void fillRandomWeights();
-    std::vector<double> processInput(std::vector<double> input);
-    void backprop(std::vector<double> output, std::vector<double> expected);
+    void processInput(std::vector<double> input);
+    void backprop(unsigned int a, std::vector<double> expected);
     double sigmoid(double x);
 };
 
