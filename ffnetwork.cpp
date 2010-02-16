@@ -78,7 +78,10 @@ FFNetwork::~FFNetwork()
 
 void FFNetwork::run()
 {
+    double sampleError;
     double errorSum;
+    double *errorAvgPerInput = new double[inputs.size()];
+    bool withinError;
 
     forever
     {
@@ -115,23 +118,32 @@ void FFNetwork::run()
                 ordering[ordered++] = index;
                 processInput(inputs[index]);
                 errorSum = 0.0;
+                errorAvgPerInput[index] = 0.0;
                 for(unsigned int a = 0; a < averaged; a++)
                 {
-                    errorSum += fabs(output[a][0] - expected[index][0]);
+                    sampleError = fabs(output[a][0] - expected[index][0]);
+                    errorAvgPerInput[index] += sampleError;
+                    errorSum += sampleError;
                     backprop(a, expected[index]);
                 }
                 error += (errorSum / double(averaged));
+                errorAvgPerInput[index] /= double(averaged);
             }
         }
-        if(epoch % 1000 == 0)
+        withinError = true;
+        for(unsigned int index = 0; index < inputs.size(); index++)
         {
-            emit epochMilestone(id, epoch, error/double(inputs.size()));
+            withinError &= (errorAvgPerInput[index] < stop);
         }
-        if(error/double(inputs.size()) < stop)
+        if(withinError)
         {
             emit epochMilestone(id, epoch, error/double(inputs.size()));
             running = false;
             successful = true;
+        }
+        else if(epoch % 1000 == 0)
+        {
+            emit epochMilestone(id, epoch, error/double(inputs.size()));
         }
         mutex.unlock();
     }
