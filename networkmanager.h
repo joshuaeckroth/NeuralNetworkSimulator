@@ -32,24 +32,27 @@ signals:
     void stopped();
 
 private slots:
-    void epochMilestone(int, int, double);
+    void epochMilestone(int, int, int, double);
+    void epochFinal(int, int, int);
     void legendChecked(QwtPlotItem*, bool);
 
 private:
     int numNetworks;
-    FFNetwork **networks;
+    int **finals;
+    unsigned int averaged;
+    FFNetwork ***networks;
     QwtPlot *plot;
     QwtLegend *legend;
-    QwtPlotCurve **curves;
-    QVector<double> **epochMilestones;
-    QVector<double> **errors;
+    QwtPlotCurve ***curves;
+    QVector<double> ***epochMilestones;
+    QVector<double> ***errors;
     QMutex mutex;
     double minEpochMilestone;
     bool isRunning;
     std::map<QwtPlotCurve*, bool> highlightedCurves;
     std::map<QwtPlotCurve*, QwtPlotMarker*> markers;
 
-    void updateMarker(QwtPlotMarker *curve, double epoch, double error);
+    void updateMarker(int id);
 };
 
 #endif // NETWORKMANAGER_H

@@ -22,7 +22,7 @@ using namespace std;
 #include "config.h"
 
 NetworkManager::NetworkManager(QwtPlot *_plot)
-    : numNetworks(0), networks(NULL), plot(_plot), curves(NULL),
+    : numNetworks(0), averaged(0), networks(NULL), plot(_plot), curves(NULL),
     minEpochMilestone(-1.0), isRunning(false)
 {
     legend = new QwtLegend;
@@ -41,20 +41,31 @@ void NetworkManager::networksFromConfig(Config *c)
     // stop and delete existing networks
     for(int i = 0; i < numNetworks; i++)
     {
-        networks[i]->quit();
-        networks[i]->wait();
-        disconnect(networks[i], SIGNAL(epochMilestone(int,int,double)),
-                   this, SLOT(epochMilestone(int,int,double)));
-        delete networks[i];
-        delete epochMilestones[i];
-        delete errors[i];
-        if(markers[curves[i]] != NULL)
+        for(unsigned int a = 0; a < averaged; a++)
         {
-            markers[curves[i]]->detach();
-            delete markers[curves[i]];
+            networks[i][a]->quit();
+            networks[i][a]->wait();
+            disconnect(networks[i][a], SIGNAL(epochMilestone(int,int,int,double)),
+                       this, SLOT(epochMilestone(int,int,int,double)));
+            disconnect(networks[i][a], SIGNAL(epochFinal(int,int,int)),
+                       this, SLOT(epochFinal(int,int,int)));
+            delete networks[i][a];
+            delete epochMilestones[i][a];
+            delete errors[i][a];
+            if(markers[curves[i][a]] != NULL)
+            {
+                markers[curves[i][a]]->detach();
+                delete markers[curves[i][a]];
+            }
+            curves[i][a]->detach();
+            delete curves[i][a];
         }
-        curves[i]->detach();
-        delete curves[i];
+
+        delete[] networks[i];
+        delete[] epochMilestones[i];
+        delete[] errors[i];
+        delete[] curves[i];
+        delete[] finals[i];
     }
     if(networks != NULL)
     {
@@ -62,6 +73,7 @@ void NetworkManager::networksFromConfig(Config *c)
         delete[] epochMilestones;
         delete[] errors;
         delete[] curves;
+        delete[] finals;
         legend->clear();
         highlightedCurves.clear();
         markers.clear();
@@ -93,7 +105,7 @@ void NetworkManager::networksFromConfig(Config *c)
     double etaEnd = c->getEtaEnd();
     double etaIncrement = c->getEtaIncrement();
     double momentum = c->getMomentum();
-    unsigned int averaged = c->getAveraged();
+    averaged = c->getAveraged();
     double stop = c->getStop();
 
     if(etaEnd < 0.00001)
@@ -104,10 +116,11 @@ void NetworkManager::networksFromConfig(Config *c)
     }
     // determine number of networks
     numNetworks = int(floor((etaEnd - etaStart)/etaIncrement)) + 1;
-    networks = new FFNetwork*[numNetworks];
-    epochMilestones = new QVector<double>*[numNetworks];
-    errors = new QVector<double>*[numNetworks];
-    curves = new QwtPlotCurve*[numNetworks];
+    networks = new FFNetwork**[numNetworks];
+    finals = new int*[numNetworks];
+    epochMilestones = new QVector<double>**[numNetworks];
+    errors = new QVector<double>**[numNetworks];
+    curves = new QwtPlotCurve**[numNetworks];
 
     // for each eta, create a network
     double eta;
@@ -118,37 +131,59 @@ void NetworkManager::networksFromConfig(Config *c)
         r = qrand() % 256;
         g = qrand() % 256;
         b = qrand() % 256;
-        networks[i] = new FFNetwork(i, layers, eta, momentum, averaged, stop, inputs, expected);
-        connect(networks[i], SIGNAL(epochMilestone(int, int, double)),
-                this, SLOT(epochMilestone(int, int, double)));
-        networks[i]->start(QThread::IdlePriority);
-        epochMilestones[i] = new QVector<double>;
-        errors[i] = new QVector<double>;
-        curves[i] = new QwtPlotCurve;
-        curves[i]->setPen(QPen(QBrush(QColor(r,g,b)), 2.0));
-        curves[i]->setTitle((QString(QChar(0x03B7))+QString(" = %1, ")+
-                             QString(QChar(0x03B1))+QString(" = %2"))
-                            .arg(eta, 3, 'f', 2)
-                            .arg(momentum, 3, 'f', 2));
-        curves[i]->setRenderHint(QwtPlotCurve::RenderAntialiased, true);
-        curves[i]->attach(plot);
-        highlightedCurves[curves[i]] = false;
-        markers[curves[i]] = NULL;
+
+        networks[i] = new FFNetwork*[averaged];
+        finals[i] = new int[averaged];
+        epochMilestones[i] = new QVector<double>*[averaged];
+        errors[i] = new QVector<double>*[averaged];
+        curves[i] = new QwtPlotCurve*[averaged];
+
+        for(unsigned int a = 0; a < averaged; a++)
+        {
+            networks[i][a] = new FFNetwork(i, a, layers, eta, momentum, stop, inputs, expected);
+            finals[i][a] = -1;
+            connect(networks[i][a], SIGNAL(epochMilestone(int,int,int,double)),
+                    this, SLOT(epochMilestone(int,int,int,double)));
+            connect(networks[i][a], SIGNAL(epochFinal(int,int,int)),
+                    this, SLOT(epochFinal(int,int,int)));
+            networks[i][a]->start(QThread::IdlePriority);
+            epochMilestones[i][a] = new QVector<double>;
+            errors[i][a] = new QVector<double>;
+            curves[i][a] = new QwtPlotCurve;
+            curves[i][a]->setPen(QPen(QBrush(QColor(r,g,b)), 2.0));
+            curves[i][a]->setRenderHint(QwtPlotCurve::RenderAntialiased, true);
+            curves[i][a]->attach(plot);
+            if(a == 0)
+            {
+                curves[i][a]->setTitle((QString(QChar(0x03B7))+QString(" = %1, ")+
+                                     QString(QChar(0x03B1))+QString(" = %2"))
+                                    .arg(eta, 3, 'f', 2)
+                                    .arg(momentum, 3, 'f', 2));
+            }
+            else
+            {
+                legend->remove(curves[i][a]);
+            }
+            highlightedCurves[curves[i][a]] = false;
+            markers[curves[i][a]] = NULL;
+        }
     }
     mutex.unlock();
 }
 
-void NetworkManager::epochMilestone(int id, int epoch, double error)
+void NetworkManager::epochMilestone(int id, int avgId, int epoch, double error)
 {
     mutex.lock();
 
-    *epochMilestones[id] << double(epoch);
-    *errors[id] << error;
-    curves[id]->setSamples(*epochMilestones[id], *errors[id]);
-    if(highlightedCurves[curves[id]])
-    {
-        updateMarker(markers[curves[id]], double(epoch), error);
-    }
+    *epochMilestones[id][avgId] << double(epoch);
+    *errors[id][avgId] << error;
+    curves[id][avgId]->setSamples(*epochMilestones[id][avgId], *errors[id][avgId]);
+
+    // continually remove the legend item
+    // (legend seems to update and add the item when curve is updated)
+    if(avgId != 0)
+        legend->remove(curves[id][avgId]);
+
     plot->replot();
 
     if(isRunning)
@@ -156,9 +191,12 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
         bool someRunning = false;
         for(int i = 0; i < numNetworks; i++)
         {
-            if(!networks[i]->isSuccessful())
+            for(unsigned int a = 0; a < averaged; a++)
             {
-                someRunning = true;
+                if(!networks[i][a]->isSuccessful())
+                {
+                    someRunning = true;
+                }
             }
         }
         if(!someRunning)
@@ -177,24 +215,45 @@ void NetworkManager::epochMilestone(int id, int epoch, double error)
             double newMinEpochMilestone = double(epoch);
             for(int i = 0; i < numNetworks; i++)
             {
-                if(networks[i]->isSuccessful()) continue;
-                if(epochMilestones[i]->isEmpty()) continue;
-                if(epochMilestones[i]->last() < newMinEpochMilestone)
-                    newMinEpochMilestone = epochMilestones[i]->last();
+                for(unsigned int a = 0; a < averaged; a++)
+                {
+                    if(networks[i][a]->isSuccessful()) continue;
+                    if(epochMilestones[i][a]->isEmpty()) continue;
+                    if(epochMilestones[i][a]->last() < newMinEpochMilestone)
+                        newMinEpochMilestone = epochMilestones[i][a]->last();
+                }
             }
             minEpochMilestone = newMinEpochMilestone;
             for(int i = 0; i < numNetworks; i++)
             {
-                if(networks[i]->isSuccessful()) continue;
-                if(!epochMilestones[i]->isEmpty()
-                    && epochMilestones[i]->last() > minEpochMilestone)
-                    networks[i]->pause();
-                else
-                    networks[i]->resume();
+                for(unsigned int a = 0; a < averaged; a++)
+                {
+                    if(networks[i][a]->isSuccessful()) continue;
+                    if(!epochMilestones[i][a]->isEmpty()
+                        && epochMilestones[i][a]->last() > minEpochMilestone)
+                        networks[i][a]->pause();
+                    else
+                        networks[i][a]->resume();
+                }
             }
         }
     }
     mutex.unlock();
+}
+
+void NetworkManager::epochFinal(int id, int avgId, int epoch)
+{
+    finals[id][avgId] = epoch;
+    // determine if this network has completely finished
+    bool done = true;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        done &= (finals[id][a] != -1);
+    }
+    if(done && highlightedCurves[curves[id][0]])
+    {
+        updateMarker(id);
+    }
 }
 
 void NetworkManager::resume()
@@ -203,9 +262,12 @@ void NetworkManager::resume()
     isRunning = true;
     for(int i = 0; i < numNetworks; i++)
     {
-        networks[i]->resume();
-        if(markers[curves[i]] != NULL)
-            markers[curves[i]]->show();
+        for(unsigned int a = 0; a < averaged; a++)
+        {
+            networks[i][a]->resume();
+            if(markers[curves[i][a]] != NULL)
+                markers[curves[i][a]]->show();
+        }
     }
     mutex.unlock();
 }
@@ -216,7 +278,10 @@ void NetworkManager::pause()
     isRunning = false;
     for(int i = 0; i < numNetworks; i++)
     {
-        networks[i]->pause();
+        for(unsigned int a = 0; a < averaged; a++)
+        {
+            networks[i][a]->pause();
+        }
     }
     mutex.unlock();
 }
@@ -227,12 +292,25 @@ void NetworkManager::restart()
     isRunning = false;
     for(int i = 0; i < numNetworks; i++)
     {
-        networks[i]->restart();
-        epochMilestones[i]->clear();
-        errors[i]->clear();
-        curves[i]->setSamples(*epochMilestones[i], *errors[i]);
-        if(markers[curves[i]] != NULL)
-            markers[curves[i]]->hide();
+        for(unsigned int a = 0; a < averaged; a++)
+        {
+            networks[i][a]->restart();
+            finals[i][a] = -1;
+            epochMilestones[i][a]->clear();
+            errors[i][a]->clear();
+            curves[i][a]->setSamples(*epochMilestones[i][a], *errors[i][a]);
+            // continually remove the legend item
+            // (legend seems to update and add the item when curve is updated)
+            if(a != 0)
+                legend->remove(curves[i][a]);
+        }
+        if(markers[curves[i][0]] != NULL)
+        {
+            markers[curves[i][0]]->detach();
+            delete markers[curves[i][0]];
+            markers[curves[i][0]] = NULL;
+        }
+        highlightedCurves[curves[i][0]] = false;
     }
     plot->replot();
     mutex.unlock();
@@ -245,36 +323,100 @@ void NetworkManager::legendChecked(QwtPlotItem *item, bool on)
     int id;
     for(id = 0; id < numNetworks; id++)
     {
-        if(curves[id] == curve) break;
+        if(curves[id][0] == curve) break;
     }
     if(id == numNetworks) return; // shouldn't happen
+
+    bool done = true;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        done &= (finals[id][a] != -1);
+    }
 
     highlightedCurves[curve] = on;
     QPen pen = curve->pen();
     if(on)
     {
         pen.setWidth(4);
-        markers[curve] = new QwtPlotMarker;
-        markers[curve]->setRenderHint(QwtPlotItem::RenderAntialiased, true);
-        updateMarker(markers[curve], epochMilestones[id]->last(), errors[id]->last());
-        markers[curve]->attach(plot);
+        if(done)
+        {
+            updateMarker(id);
+        }
     }
     else
     {
         pen.setWidth(2);
-        markers[curve]->detach();
-        delete markers[curve];
-        markers[curve] = NULL;
+        if(done && markers[curves[id][0]] != NULL)
+        {
+            markers[curves[id][0]]->detach();
+            delete markers[curves[id][0]];
+            markers[curves[id][0]] = NULL;
+        }
     }
-    curve->setPen(pen);
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        curves[id][a]->setPen(pen);
+
+        // continually remove the legend item
+        // (legend seems to update and add the item when curve is updated)
+        if(a != 0)
+            legend->remove(curves[id][a]);
+    }
     plot->replot();
 }
 
-void NetworkManager::updateMarker(QwtPlotMarker *marker, double epoch, double error)
+void NetworkManager::updateMarker(int id)
 {
-    marker->setXValue(epoch + 500);
-    marker->setYValue(error - 0.01);
-    marker->setLabel(QwtText(QString("%1 (%2)")
-                             .arg(epoch)
-                             .arg(error, 3, 'f', 2)));
+    if(markers[curves[id][0]] == NULL)
+    {
+        markers[curves[id][0]] = new QwtPlotMarker;
+        markers[curves[id][0]]->setRenderHint(QwtPlotItem::RenderAntialiased, true);
+    }
+
+    int avgEpochs = 0;
+    for(unsigned int a = 0; a < averaged; a++)
+        avgEpochs += finals[id][a];
+    avgEpochs /= averaged;
+    double stddevsum = 0.0;
+    for(unsigned int a = 0; a < averaged; a++)
+        stddevsum += pow((double(finals[id][a]) - double(avgEpochs)), 2.0);
+    double stddev = sqrt(stddevsum / double(averaged));
+
+    // do it again, ignoring any point that's two stddevs away
+    int avgEpochs2 = 0;
+    int count = 0;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        if(double(finals[id][a]) > 2*stddev+avgEpochs) continue;
+        avgEpochs2 += finals[id][a];
+        count++;
+    }
+    avgEpochs2 /= count;
+    double stddevsum2 = 0.0;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        if(double(finals[id][a]) > 2*stddev+avgEpochs) continue;
+        stddevsum2 += pow((double(finals[id][a]) - double(avgEpochs2)), 2.0);
+    }
+    double stddev2 = sqrt(stddevsum2 / double(count));
+
+    markers[curves[id][0]]->setXValue(avgEpochs2);
+    markers[curves[id][0]]->setYValue(0.1);
+    if(avgEpochs != avgEpochs2)
+    {
+        QString text = QString(QChar(0x03BC))+QString("=%1/%2, ").arg(avgEpochs).arg(avgEpochs2) +
+                       QString(QChar(0x03C3))+QString("=%1/%2").arg(int(stddev)).arg(int(stddev2));
+        markers[curves[id][0]]->setLabel(QwtText(text));
+        qDebug() << QString("id: %1; %2").arg(id).arg(text);
+    }
+    else
+    {
+        QString text = QString(QChar(0x03BC))+QString("=%1, ").arg(avgEpochs) +
+                       QString(QChar(0x03C3))+QString("=%1").arg(int(stddev));
+        markers[curves[id][0]]->setLabel(QwtText(text));
+        qDebug() << QString("id: %1; %2").arg(id).arg(text);
+    }
+
+    markers[curves[id][0]]->attach(plot);
+    plot->replot();
 }

@@ -12,10 +12,10 @@ class FFNetwork : public QThread
 Q_OBJECT
 public:
     FFNetwork(int _id,
+              int _avgId,
               std::vector<unsigned int> _layers,
               double _eta,
               double _momentum,
-              unsigned int _averaged,
               double _stop,
               std::vector<std::vector<double> > _inputs,
               std::vector<std::vector<double> > _expected);
@@ -28,20 +28,21 @@ public:
     void quit();
 
 signals:
-    void epochMilestone(int id, int epoch, double error);
+    void epochMilestone(int id, int avgId, int epoch, double error);
+    void epochFinal(int id, int avgId, int epoch);
 
 private:
     int id;
+    int avgId;
     std::vector<unsigned int> layers;
     std::vector<std::vector<double> > inputs;
     std::vector<std::vector<double> > expected;
-    double ***weights;
-    double ***prevWeightUpdates;
-    double ***neuronVals;
-    double ***delta;
+    double **weights;
+    double **prevWeightUpdates;
+    double **neuronVals;
+    double **delta;
     double eta;
     double momentum;
-    unsigned int averaged;
     double stop;
     QMutex mutex;
     QWaitCondition runningCond;
@@ -52,13 +53,12 @@ private:
     unsigned int ordered;
     unsigned int index;
     bool seen;
-    std::vector<double> *output;
     bool quitNow;
     bool successful;
 
     void fillRandomWeights();
-    void processInput(std::vector<double> input);
-    void backprop(unsigned int a, std::vector<double> expected);
+    std::vector<double> processInput(std::vector<double> input);
+    void backprop(std::vector<double> output, std::vector<double> expected);
     double sigmoid(double x);
 };
 

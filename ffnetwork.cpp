@@ -12,16 +12,15 @@ using namespace std;
   * determined by the layers vector.
   */
 FFNetwork::FFNetwork(int _id,
+                     int _avgId,
                      std::vector<unsigned int>_layers,
                      double _eta,
                      double _momentum,
-                     unsigned int _averaged,
                      double _stop,
                      vector<vector<double> > _inputs,
                      vector<vector<double> > _expected) :
-    id(_id), layers(_layers), inputs(_inputs), expected(_expected),
-    eta(_eta), momentum(_momentum), averaged(_averaged),
-    stop(_stop), quitNow(false), successful(false)
+    id(_id), avgId(_avgId), layers(_layers), inputs(_inputs), expected(_expected),
+    eta(_eta), momentum(_momentum), stop(_stop), quitNow(false), successful(false)
 {
     assert(layers.size() > 1);
 
@@ -29,41 +28,33 @@ FFNetwork::FFNetwork(int _id,
     epoch = 0;
     error = 0.0;
 
-    weights = new double**[averaged];
-    prevWeightUpdates = new double**[averaged];
-    neuronVals = new double**[averaged];
-    delta = new double**[averaged];
-    output = new vector<double>[averaged];
-    for(unsigned int a = 0; a < averaged; a++)
+    weights = new double*[layers.size() - 1];
+    prevWeightUpdates = new double*[layers.size() - 1];
+
+    // need #layers neuron values because neuronVals[0] will hold input values
+    neuronVals = new double*[layers.size()];
+    neuronVals[0] = new double[layers[0]];
+
+    delta = new double*[layers.size()-1];
+
+    for(unsigned int i = 1; i < layers.size(); i++)
     {
-        weights[a] = new double*[layers.size() - 1];
-        prevWeightUpdates[a] = new double*[layers.size() - 1];
+        // each layer has n*p + n weights
+        // where n = number of neurons on this layer (layers[i])
+        // and p = number of neurons on previous layer (layers[i-1]);
+        // the (+ n) is for n bias terms;
 
-        // need #layers neuron values because neuronVals[0] will hold input values
-        neuronVals[a] = new double*[layers.size()];
-        neuronVals[a][0] = new double[layers[0]];
+        // the weights for neuron j (counted from 0) on a layer i are in position
+        // weights[i-1][j*(p+1)], weights[i-1][j*(p+1)+1], ..., weights[i-1][j*(p+1)+(p-1)]
+        // with bias weights[i-1][j*(p+1)+p]
+        weights[i-1] = new double[layers[i]*layers[i-1] + layers[i]];
+        prevWeightUpdates[i-1] = new double[layers[i]*layers[i-1] + layers[i]];
 
-        delta[a] = new double*[layers.size()-1];
+        // since each layer has n neurons, we need n cells to hold the output
+        // of each neuron (-1 or 1)
+        neuronVals[i] = new double[layers[i]];
 
-        for(unsigned int i = 1; i < layers.size(); i++)
-        {
-            // each layer has n*p + n weights
-            // where n = number of neurons on this layer (layers[i])
-            // and p = number of neurons on previous layer (layers[i-1]);
-            // the (+ n) is for n bias terms;
-
-            // the weights for neuron j (counted from 0) on a layer i are in position
-            // weights[i-1][j*(p+1)], weights[i-1][j*(p+1)+1], ..., weights[i-1][j*(p+1)+(p-1)]
-            // with bias weights[i-1][j*(p+1)+p]
-            weights[a][i-1] = new double[layers[i]*layers[i-1] + layers[i]];
-            prevWeightUpdates[a][i-1] = new double[layers[i]*layers[i-1] + layers[i]];
-
-            // since each layer has n neurons, we need n cells to hold the output
-            // of each neuron (-1 or 1)
-            neuronVals[a][i] = new double[layers[i]];
-
-            delta[a][i-1] = new double[layers[i]];
-        }
+        delta[i-1] = new double[layers[i]];
     }
 
     ordering = new unsigned int[inputs.size()];
@@ -78,10 +69,7 @@ FFNetwork::~FFNetwork()
 
 void FFNetwork::run()
 {
-    double sampleError;
-    double errorSum;
-    double *errorAvgPerInput = new double[inputs.size()];
-    bool withinError;
+    vector<double> output;
 
     forever
     {
@@ -116,34 +104,22 @@ void FFNetwork::run()
             if(!seen)
             {
                 ordering[ordered++] = index;
-                processInput(inputs[index]);
-                errorSum = 0.0;
-                errorAvgPerInput[index] = 0.0;
-                for(unsigned int a = 0; a < averaged; a++)
-                {
-                    sampleError = fabs(output[a][0] - expected[index][0]);
-                    errorAvgPerInput[index] += sampleError;
-                    errorSum += sampleError;
-                    backprop(a, expected[index]);
-                }
-                error += (errorSum / double(averaged));
-                errorAvgPerInput[index] /= double(averaged);
+                output = processInput(inputs[index]);
+                // how to measure the error between two multi-dimensional vectors?
+                error += fabs(output[0] - expected[index][0]);
+                backprop(output, expected[index]);
             }
         }
-        withinError = true;
-        for(unsigned int index = 0; index < inputs.size(); index++)
+        if(error < stop)
         {
-            withinError &= (errorAvgPerInput[index] < stop);
-        }
-        if(withinError)
-        {
-            emit epochMilestone(id, epoch, error/double(inputs.size()));
+            emit epochMilestone(id, avgId, epoch, error);
+            emit epochFinal(id, avgId, epoch);
             running = false;
             successful = true;
         }
         else if(epoch % 1000 == 0)
         {
-            emit epochMilestone(id, epoch, error/double(inputs.size()));
+            emit epochMilestone(id, avgId, epoch, error);
         }
         mutex.unlock();
     }
@@ -194,66 +170,61 @@ void FFNetwork::quit()
 
 void FFNetwork::fillRandomWeights()
 {
-    for(unsigned int a = 0; a < averaged; a++)
+    for(unsigned int i = 1; i < layers.size(); i++)
     {
-        for(unsigned int i = 1; i < layers.size(); i++)
+        for(unsigned int j = 0; j < (layers[i]*layers[i-1] + layers[i]); j++)
         {
-            for(unsigned int j = 0; j < (layers[i]*layers[i-1] + layers[i]); j++)
-            {
-                // random floating-point number between -1 and 1
-                weights[a][i-1][j] = (rand() - RAND_MAX/2)/static_cast<double>(RAND_MAX/2);
+            // random floating-point number between -1 and 1
+            weights[i-1][j] = (rand() - RAND_MAX/2)/static_cast<double>(RAND_MAX/2);
 
-                // set previous weight update to 0.0
-                prevWeightUpdates[a][i-1][j] = 0.0;
-            }
+            // set previous weight update to 0.0
+            prevWeightUpdates[i-1][j] = 0.0;
         }
     }
 }
 
-void FFNetwork::processInput(vector<double> input)
+vector<double> FFNetwork::processInput(vector<double> input)
 {
     assert(input.size() == layers[0]);
 
-    for(unsigned int a = 0; a < averaged; a++)
+    // fill neuronVals[0] with input values
+    for(unsigned i = 0; i < layers[0]; i++)
     {
-        // fill neuronVals[0] with input values
-        for(unsigned i = 0; i < layers[0]; i++)
-        {
-            neuronVals[a][0][i] = input[i];
-        }
+        neuronVals[0][i] = input[i];
+    }
 
-        double sum;
-        for(unsigned int i = 1; i < layers.size(); i++)
+    double sum;
+    for(unsigned int i = 1; i < layers.size(); i++)
+    {
+        // for each neuron in layer
+        for(unsigned int j = 0; j < layers[i]; j++)
         {
-            // for each neuron in layer
-            for(unsigned int j = 0; j < layers[i]; j++)
+            sum = 0.0;
+
+            // find sum with weights (ignore bias when counting with w)
+            for(unsigned int w = 0; w < layers[i-1]; w++)
             {
-                sum = 0.0;
-
-                // find sum with weights (ignore bias when counting with w)
-                for(unsigned int w = 0; w < layers[i-1]; w++)
-                {
-                    sum += neuronVals[a][i-1][w] * weights[a][i-1][j*(layers[i-1]+1)+w];
-                }
-
-                // add bias
-                sum += weights[a][i-1][j*(layers[i-1]+1) + layers[i-1]];
-
-                // set neuron's final value
-                neuronVals[a][i][j] = sigmoid(sum);
+                sum += neuronVals[i-1][w] * weights[i-1][j*(layers[i-1]+1)+w];
             }
-        }
 
-        // determine final output
-        output[a] = vector<double>(layers[layers.size()-1]);
-        for(unsigned int j = 0; j < layers[layers.size()-1]; j++)
-        {
-            output[a][j] = neuronVals[a][layers.size()-1][j];
+            // add bias
+            sum += weights[i-1][j*(layers[i-1]+1) + layers[i-1]];
+
+            // set neuron's final value
+            neuronVals[i][j] = sigmoid(sum);
         }
     }
+
+    // determine final output
+    vector<double> output = vector<double>(layers[layers.size()-1]);
+    for(unsigned int j = 0; j < layers[layers.size()-1]; j++)
+    {
+        output[j] = neuronVals[layers.size()-1][j];
+    }
+    return output;
 }
 
-void FFNetwork::backprop(unsigned int a, vector<double> expected)
+void FFNetwork::backprop(vector<double> output, vector<double> expected)
 {
     double sum;
     double weightUpdate;
@@ -264,8 +235,8 @@ void FFNetwork::backprop(unsigned int a, vector<double> expected)
     // for each output neuron
     for(unsigned int j = 0; j < layers[layers.size()-1]; j++)
     {
-        delta[a][layers.size()-2][j] = output[a][j] * (1 - output[a][j]) *
-                                        (expected[j] - output[a][j]);
+        delta[layers.size()-2][j] = output[j] * (1 - output[j]) *
+                                    (expected[j] - output[j]);
 
         // for each weight going to output layer
         // (ignore bias when counting with w)
@@ -274,18 +245,18 @@ void FFNetwork::backprop(unsigned int a, vector<double> expected)
             weightIndexA = layers.size()-2;
             weightIndexB = j*(layers[layers.size()-2]+1) + w;
 
-            weightUpdate = eta * delta[a][layers.size()-2][j] * neuronVals[a][layers.size()-2][w] +
-                           momentum * prevWeightUpdates[a][weightIndexA][weightIndexB];
-            weights[a][weightIndexA][weightIndexB] += weightUpdate;
-            prevWeightUpdates[a][weightIndexA][weightIndexB] = weightUpdate;
+            weightUpdate = eta * delta[layers.size()-2][j] * neuronVals[layers.size()-2][w] +
+                           momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+            weights[weightIndexA][weightIndexB] += weightUpdate;
+            prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
         }
         // update bias
         weightIndexA = layers.size()-2;
         weightIndexB = j*(layers[layers.size()-2]+1) + layers[layers.size()-2];
-        weightUpdate = eta * delta[a][layers.size()-2][j]
-                       + momentum * prevWeightUpdates[a][weightIndexA][weightIndexB];
-        weights[a][weightIndexA][weightIndexB] += weightUpdate;
-        prevWeightUpdates[a][weightIndexA][weightIndexB] = weightUpdate;
+        weightUpdate = eta * delta[layers.size()-2][j]
+                       + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+        weights[weightIndexA][weightIndexB] += weightUpdate;
+        prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
     }
 
     // for each hidden layer (backwards)
@@ -298,9 +269,9 @@ void FFNetwork::backprop(unsigned int a, vector<double> expected)
             // for every neuron that j connects to (forward)
             for(unsigned int k = 0; k < layers[i+1]; k++)
             {
-                sum += weights[a][i][k*(layers[i]+1) + j] * delta[a][i][k];
+                sum += weights[i][k*(layers[i]+1) + j] * delta[i][k];
             }
-            delta[a][i-1][j] = neuronVals[a][i][j] * (1 - neuronVals[a][i][j]) * sum;
+            delta[i-1][j] = neuronVals[i][j] * (1 - neuronVals[i][j]) * sum;
 
             // for each weight going to this layer
             // (ignore bias when counting with w)
@@ -308,18 +279,18 @@ void FFNetwork::backprop(unsigned int a, vector<double> expected)
             {
                 weightIndexA = i-1;
                 weightIndexB = j*(layers[i]+1) + w;
-                weightUpdate = eta * delta[a][i-1][j] * neuronVals[a][i-i][w]
-                               + momentum * prevWeightUpdates[a][weightIndexA][weightIndexB];
-                weights[a][weightIndexA][weightIndexB] += weightUpdate;
-                prevWeightUpdates[a][weightIndexA][weightIndexB] = weightUpdate;
+                weightUpdate = eta * delta[i-1][j] * neuronVals[i-i][w]
+                               + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+                weights[weightIndexA][weightIndexB] += weightUpdate;
+                prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
             }
             // update bias
             weightIndexA = i-1;
             weightIndexB = j*(layers[i]+1) + layers[i];
-            weightUpdate = eta * delta[a][i-1][j]
-                           + momentum * prevWeightUpdates[a][weightIndexA][weightIndexB];
-            weights[a][weightIndexA][weightIndexB] += weightUpdate;
-            prevWeightUpdates[a][weightIndexA][weightIndexB] = weightUpdate;
+            weightUpdate = eta * delta[i-1][j]
+                           + momentum * prevWeightUpdates[weightIndexA][weightIndexB];
+            weights[weightIndexA][weightIndexB] += weightUpdate;
+            prevWeightUpdates[weightIndexA][weightIndexB] = weightUpdate;
         }
     }
 }
