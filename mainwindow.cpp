@@ -1,8 +1,6 @@
 #include <vector>
 using namespace std;
 
-#include <QDebug>
-
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "networkmanager.h"

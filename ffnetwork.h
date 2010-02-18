@@ -24,8 +24,10 @@ public:
     void restart();
     void pause();
     void resume();
+    void cancel();
     void run();
     void quit();
+    QString toString();
 
 signals:
     void epochMilestone(int id, int avgId, int epoch, double error);

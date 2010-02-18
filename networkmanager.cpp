@@ -3,6 +3,7 @@
 #include <map>
 #include <cstdlib>
 #include <ctime>
+#include <iostream>
 using namespace std;
 
 #include <qwt_plot.h>
@@ -15,7 +16,6 @@ using namespace std;
 #include <QBrush>
 #include <QColor>
 #include <QChar>
-#include <QDebug>
 
 #include "networkmanager.h"
 #include "ffnetwork.h"
@@ -179,6 +179,32 @@ void NetworkManager::epochMilestone(int id, int avgId, int epoch, double error)
     *errors[id][avgId] << error;
     curves[id][avgId]->setSamples(*epochMilestones[id][avgId], *errors[id][avgId]);
 
+    // find mean and stddev for the finals in this network configuration
+    // then stop this network (id,avgId) if it's way beyond the finals mean
+    int avgFinalEpoch = 0;
+    int count = 0;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        if(finals[id][a] == -1) continue;
+        avgFinalEpoch += finals[id][a];
+        count++;
+    }
+    if(count != 0)
+    {
+        avgFinalEpoch /= count;
+        double stddevsum = 0.0;
+        for(unsigned int a = 0; a < averaged; a++)
+        {
+            if(finals[id][a] == -1) continue;
+            stddevsum += pow(avgFinalEpoch - finals[id][a], 2.0);
+        }
+        double stddev = sqrt(stddevsum / count);
+        if(stddev > 0.0 && epoch > 3*stddev + avgFinalEpoch)
+        {
+            networks[id][avgId]->cancel();
+        }
+    }
+
     // continually remove the legend item
     // (legend seems to update and add the item when curve is updated)
     if(avgId != 0)
@@ -327,10 +353,10 @@ void NetworkManager::legendChecked(QwtPlotItem *item, bool on)
     }
     if(id == numNetworks) return; // shouldn't happen
 
-    bool done = true;
+    bool networkSuccessful = true;
     for(unsigned int a = 0; a < averaged; a++)
     {
-        done &= (finals[id][a] != -1);
+        networkSuccessful &= networks[id][a]->isSuccessful();
     }
 
     highlightedCurves[curve] = on;
@@ -338,7 +364,7 @@ void NetworkManager::legendChecked(QwtPlotItem *item, bool on)
     if(on)
     {
         pen.setWidth(4);
-        if(done)
+        if(networkSuccessful)
         {
             updateMarker(id);
         }
@@ -346,7 +372,7 @@ void NetworkManager::legendChecked(QwtPlotItem *item, bool on)
     else
     {
         pen.setWidth(2);
-        if(done && markers[curves[id][0]] != NULL)
+        if(markers[curves[id][0]] != NULL)
         {
             markers[curves[id][0]]->detach();
             delete markers[curves[id][0]];
@@ -374,20 +400,28 @@ void NetworkManager::updateMarker(int id)
     }
 
     int avgEpochs = 0;
-    for(unsigned int a = 0; a < averaged; a++)
-        avgEpochs += finals[id][a];
-    avgEpochs /= averaged;
-    double stddevsum = 0.0;
-    for(unsigned int a = 0; a < averaged; a++)
-        stddevsum += pow((double(finals[id][a]) - double(avgEpochs)), 2.0);
-    double stddev = sqrt(stddevsum / double(averaged));
-
-    // do it again, ignoring any point that's two stddevs away
-    int avgEpochs2 = 0;
     int count = 0;
     for(unsigned int a = 0; a < averaged; a++)
     {
-        if(double(finals[id][a]) > 2*stddev+avgEpochs) continue;
+        if(finals[id][a] == -1) continue; // may be true if a network was "canceled"
+        avgEpochs += finals[id][a];
+        count++;
+    }
+    avgEpochs /= count;
+    double stddevsum = 0.0;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        if(finals[id][a] == -1) continue;
+        stddevsum += pow((double(finals[id][a]) - double(avgEpochs)), 2.0);
+    }
+    double stddev = sqrt(stddevsum / double(count));
+
+    // do it again, ignoring any point that's two stddevs away
+    int avgEpochs2 = 0;
+    count = 0;
+    for(unsigned int a = 0; a < averaged; a++)
+    {
+        if(stddev > 0.0 && double(finals[id][a]) > 2*stddev+avgEpochs) continue;
         avgEpochs2 += finals[id][a];
         count++;
     }
@@ -395,7 +429,7 @@ void NetworkManager::updateMarker(int id)
     double stddevsum2 = 0.0;
     for(unsigned int a = 0; a < averaged; a++)
     {
-        if(double(finals[id][a]) > 2*stddev+avgEpochs) continue;
+        if(stddev > 0.0 && double(finals[id][a]) > 2*stddev+avgEpochs) continue;
         stddevsum2 += pow((double(finals[id][a]) - double(avgEpochs2)), 2.0);
     }
     double stddev2 = sqrt(stddevsum2 / double(count));
@@ -404,17 +438,21 @@ void NetworkManager::updateMarker(int id)
     markers[curves[id][0]]->setYValue(0.1);
     if(avgEpochs != avgEpochs2)
     {
-        QString text = QString(QChar(0x03BC))+QString("=%1/%2, ").arg(avgEpochs).arg(avgEpochs2) +
-                       QString(QChar(0x03C3))+QString("=%1/%2").arg(int(stddev)).arg(int(stddev2));
+        QString text = QString(QChar(0x03BC))+QString("=%1/%2, ")
+                       .arg(avgEpochs).arg(avgEpochs2) +
+                       QString(QChar(0x03C3))+QString("=%1/%2")
+                       .arg(int(stddev)).arg(int(stddev2));
         markers[curves[id][0]]->setLabel(QwtText(text));
-        qDebug() << QString("id: %1; %2").arg(id).arg(text);
+        cout << (QString("%1 - %2").arg(networks[id][0]->toString())
+                 .arg(text).toAscii().data()) << endl;
     }
     else
     {
         QString text = QString(QChar(0x03BC))+QString("=%1, ").arg(avgEpochs) +
                        QString(QChar(0x03C3))+QString("=%1").arg(int(stddev));
         markers[curves[id][0]]->setLabel(QwtText(text));
-        qDebug() << QString("id: %1; %2").arg(id).arg(text);
+        cout << (QString("%1 - %2").arg(networks[id][0]->toString())
+                 .arg(text).toAscii().data()) << endl;
     }
 
     markers[curves[id][0]]->attach(plot);

@@ -64,6 +64,18 @@ FFNetwork::FFNetwork(int _id,
 
 FFNetwork::~FFNetwork()
 {
+    for(unsigned int i = 1; i < layers.size(); i++)
+    {
+        delete[] weights[i-1];
+        delete[] prevWeightUpdates[i-1];
+        delete[] neuronVals[i];
+        delete[] delta[i-1];
+    }
+    delete[] neuronVals[0];
+    delete[] neuronVals;
+    delete[] delta;
+    delete[] prevWeightUpdates;
+    delete[] weights;
     delete[] ordering;
 }
 
@@ -157,6 +169,20 @@ void FFNetwork::resume()
         runningCond.wakeAll();
     }
     mutex.unlock();
+}
+
+void FFNetwork::cancel()
+{
+    mutex.lock();
+    running = false;
+    successful = true;
+    mutex.unlock();
+}
+
+QString FFNetwork::toString()
+{
+    return QString("id %1, eta %2, momentum %3")
+            .arg(id).arg(eta).arg(momentum);
 }
 
 void FFNetwork::quit()

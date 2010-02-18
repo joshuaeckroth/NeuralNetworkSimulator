@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <ctime>
+#include <iostream>
 using namespace std;
 
 #include <QtGui/QApplication>
